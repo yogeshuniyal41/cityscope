@@ -79,7 +79,7 @@ export default function Login() {
 
         <p className="text-sm text-gray-500 text-center mt-4">
           Need an account ?
-          <Link href='/signup' className='text-blue-500 hover:underline'>Sign Up</Link>
+          <Link href="/signup" className="text-blue-500 hover:underline">Sign Up</Link>
        
         </p>
       </div>

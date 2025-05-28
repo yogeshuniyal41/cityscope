@@ -24,6 +24,8 @@ function HomeContent() {
     setState((prev) => ({ ...prev, ...partial }));
 
   useEffect(() => {
+    let isMounted = true;
+
     const checkAuthAndInit = async () => {
       try {
         const authRes = await fetch("/api/check-auth", { credentials: "include" });
@@ -35,7 +37,9 @@ function HomeContent() {
 
         const userId = authData.userId;
         const [posts, city] = await Promise.all([fetchPosts(), getLocation()]);
-        setPartialState({ userId, posts, city, loading: false });
+        if (isMounted) {
+          setPartialState({ userId, posts, city, loading: false });
+        }
       } catch (error) {
         console.error("Auth or Init Error:", error);
         router.push("/login");
@@ -43,23 +47,38 @@ function HomeContent() {
     };
 
     checkAuthAndInit();
-  }, [router]);
+
+    return () => {
+      isMounted = false;
+    };
+  }, [router, searchParams.toString()]); // Added searchParams as dependency so posts refetch on query change
 
   const getLocation = async () => {
     if (!navigator.geolocation) return "Unknown";
 
     return new Promise((resolve) => {
-      navigator.geolocation.getCurrentPosition(async ({ coords }) => {
-        try {
-          const res = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json`
-          );
-          const data = await res.json();
-          resolve(data.address.city || data.address.state_district || data.address.county || "Unknown");
-        } catch {
+      navigator.geolocation.getCurrentPosition(
+        async ({ coords }) => {
+          try {
+            const res = await fetch(
+              `https://nominatim.openstreetmap.org/reverse?lat=${coords.latitude}&lon=${coords.longitude}&format=json`
+            );
+            const data = await res.json();
+            resolve(
+              data.address.city ||
+                data.address.state_district ||
+                data.address.county ||
+                "Unknown"
+            );
+          } catch {
+            resolve("Unknown");
+          }
+        },
+        () => {
+          // on error or permission denied
           resolve("Unknown");
         }
-      });
+      );
     });
   };
 
@@ -67,6 +86,7 @@ function HomeContent() {
     try {
       const query = searchParams.toString();
       const res = await fetch(`/api/posts/sort?${query}`);
+      if (!res.ok) throw new Error("Failed to fetch posts");
       const data = await res.json();
       return data;
     } catch (err) {
@@ -91,16 +111,21 @@ function HomeContent() {
       `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
       { method: "POST", body: form }
     );
+    if (!res.ok) {
+      console.error("Failed to upload image");
+      return "";
+    }
     const data = await res.json();
     return data.secure_url;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     let imageUrl = "";
     if (state.image) imageUrl = await uploadImage();
 
-    await fetch("/api/posts", {
+    const res = await fetch("/api/posts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -111,6 +136,11 @@ function HomeContent() {
         userId: state.userId,
       }),
     });
+
+    if (!res.ok) {
+      console.error("Failed to create post");
+      return;
+    }
 
     const updatedPosts = await fetchPosts();
     setPartialState({
@@ -132,6 +162,8 @@ function HomeContent() {
       if (res.ok) {
         const updatedPosts = await fetchPosts();
         setPartialState({ posts: updatedPosts });
+      } else {
+        console.error(`Failed to ${endpoint} post, status: ${res.status}`);
       }
     } catch (error) {
       console.error(`Failed to ${endpoint} post`, error);
@@ -153,6 +185,8 @@ function HomeContent() {
           replyTexts: { ...state.replyTexts, [postId]: "" },
           posts: updatedPosts,
         });
+      } else {
+        console.error("Failed to post reply, status:", res.status);
       }
     } catch (error) {
       console.error("Failed to post reply", error);
@@ -203,7 +237,10 @@ function HomeContent() {
           <p className="text-sm text-gray-500">
             {state.image ? state.image.name : "No file chosen"}
           </p>
-          <button className="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition">
+          <button
+            type="submit"
+            className="w-full bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
+          >
             Post
           </button>
         </form>
@@ -211,7 +248,10 @@ function HomeContent() {
         <div className="space-y-6">
           {state.posts.length > 0 ? (
             state.posts.map((post) => (
-              <div key={post._id} className="bg-white p-6 rounded-lg shadow-md">
+              <div
+                key={post._id}
+                className="bg-white p-6 rounded-lg shadow-md"
+              >
                 <p className="text-gray-800 text-lg">{post.text}</p>
                 <span className="text-sm text-gray-500">{post.type}</span>
                 <p className="text-xs text-gray-400">{post.city}</p>
@@ -221,8 +261,9 @@ function HomeContent() {
                     alt="Post"
                     height={300}
                     width={500}
-                    layout="responsive"
-                    className="mt-3 rounded-lg w-full max-h-80 object-cover shadow-sm"
+                    style={{ objectFit: "cover" }}
+                    className="mt-3 rounded-lg w-full max-h-80 shadow-sm"
+                    priority={false}
                   />
                 )}
                 <div className="flex items-center justify-between mt-3">
@@ -244,9 +285,14 @@ function HomeContent() {
                   {post.replies?.length > 0 ? (
                     <ul className="space-y-2 max-h-40 overflow-auto border border-gray-200 p-2 rounded-md bg-gray-50">
                       {post.replies.map((reply) => (
-                        <li key={reply._id} className="p-3 bg-white rounded-md shadow-sm">
+                        <li
+                          key={reply._id}
+                          className="p-3 bg-white rounded-md shadow-sm"
+                        >
                           <p className="text-gray-700">{reply.text}</p>
-                          <p className="text-xs text-gray-500">{new Date(reply.createdAt).toLocaleString()}</p>
+                          <p className="text-xs text-gray-500">
+                            {new Date(reply.createdAt).toLocaleString()}
+                          </p>
                         </li>
                       ))}
                     </ul>
@@ -269,6 +315,7 @@ function HomeContent() {
                       className="flex-grow border border-gray-300 p-2 rounded-md shadow-sm focus:ring-2 focus:ring-blue-400"
                     />
                     <button
+                      type="button"
                       onClick={() => handleReplySubmit(post._id)}
                       className="ml-2 bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition"
                     >
@@ -279,7 +326,9 @@ function HomeContent() {
               </div>
             ))
           ) : (
-            <p className="text-gray-500 text-center">No posts found for selected filters.</p>
+            <p className="text-gray-500 text-center">
+              No posts found for selected filters.
+            </p>
           )}
         </div>
       </main>
