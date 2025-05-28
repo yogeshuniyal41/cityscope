@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
@@ -39,7 +39,7 @@ export default function Profile() {
     };
 
     fetchUserAndPosts();
-  }, []);
+  }, [router]);
 
   const handleSaveProfile = async (e) => {
     e.preventDefault();
@@ -140,7 +140,7 @@ export default function Profile() {
               <p className="text-gray-800">{post.text}</p>
               <span className="text-sm text-gray-500">{post.type}</span>
               <p className="text-xs text-gray-400">{post.city}</p>
-              {post.imageUrl && <img src={post.imageUrl} alt="Post" className="mt-2 rounded-md max-h-60 object-cover shadow-sm" />}
+              {post.imageUrl && <Image src={post.imageUrl} layout="responsive" height={300} width={500} alt="Post" className="mt-2 rounded-md max-h-60 object-cover shadow-sm" />}
             </div>
           ))
         ) : (

@@ -2,45 +2,41 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 
 export default function Navbar({ userId }) {
   const router = useRouter();
-
-  // If no userId is provided, don't render anything.
-  if (!userId) return null;
-
-  // States for filter logic
   const [selectedCity, setSelectedCity] = useState("");
   const [selectedType, setSelectedType] = useState("");
   const [availableCities, setAvailableCities] = useState([]);
   const [availableTypes, setAvailableTypes] = useState([]);
   const [loadingFilters, setLoadingFilters] = useState(true);
-  const [filteredPosts, setFilteredPosts] = useState([]);
 
-  // Fetch filters for posts
-  useEffect(() => {
-    const fetchFilters = async () => {
-      try {
-        const res = await fetch("/api/posts");
-        if (!res.ok) throw new Error("Failed to fetch posts for filters");
-        const data = await res.json();
-        const cities = [...new Set(data.map((post) => post.city))];
-        const types = [...new Set(data.map((post) => post.type))];
-        setAvailableCities(cities);
-        setAvailableTypes(types);
-      } catch (error) {
-        console.error("Error fetching filter data:", error);
-      } finally {
-        setLoadingFilters(false);
-      }
-    };
+  const fetchFilterOptions = useCallback(async () => {
+    try {
+      const res = await fetch("/api/posts");
+      if (!res.ok) throw new Error("Failed to fetch posts for filters");
 
-    fetchFilters();
+      const data = await res.json();
+      const cities = [...new Set(data.map((post) => post.city))];
+      const types = [...new Set(data.map((post) => post.type))];
+
+      setAvailableCities(cities);
+      setAvailableTypes(types);
+    } catch (err) {
+      console.error("Error fetching filters:", err);
+    } finally {
+      setLoadingFilters(false);
+    }
   }, []);
 
+  useEffect(() => {
+    fetchFilterOptions();
+  }, [fetchFilterOptions]);
+
   const handleLogout = async () => {
-    if (!window.confirm("Are you sure you want to logout?")) return;
+    if (!confirm("Are you sure you want to logout?")) return;
+
     try {
       await fetch("/api/logout", { method: "POST" });
       router.push("/login");
@@ -59,12 +55,30 @@ export default function Navbar({ userId }) {
     try {
       const res = await fetch(`/api/posts/sort?${query.toString()}`);
       if (!res.ok) throw new Error("Failed to fetch sorted posts");
-      const data = await res.json();
-      setFilteredPosts(data);
+      // const data = await res.json();
+      // You can use `setFilteredPosts(data)` if needed
     } catch (error) {
       console.error("Error fetching sorted posts:", error);
     }
   };
+
+  const FilterDropdown = ({ label, value, onChange, options, disabled }) => (
+    <select
+      value={value}
+      onChange={onChange}
+      disabled={disabled}
+      className="border border-gray-300 rounded-md px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring focus:ring-blue-300"
+    >
+      <option value="">{`All ${label}`}</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
+      ))}
+    </select>
+  );
+
+  if (!userId) return null;
 
   return (
     <nav className="bg-gray-100 py-4 shadow-md">
@@ -79,35 +93,23 @@ export default function Navbar({ userId }) {
           </Link>
         </div>
 
-        {/* Filters (disabled while filter data is loading) */}
+        {/* Filters & Actions */}
         <div className="flex items-center gap-4">
-          <select
+          <FilterDropdown
+            label="Cities"
             value={selectedCity}
             onChange={(e) => setSelectedCity(e.target.value)}
+            options={availableCities}
             disabled={loadingFilters}
-            className="border border-gray-300 rounded-md px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring focus:ring-blue-300"
-          >
-            <option value="">All Cities</option>
-            {availableCities.map((city) => (
-              <option key={city} value={city}>
-                {city}
-              </option>
-            ))}
-          </select>
+          />
 
-          <select
+          <FilterDropdown
+            label="Types"
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value)}
+            options={availableTypes}
             disabled={loadingFilters}
-            className="border border-gray-300 rounded-md px-3 py-2 bg-white shadow-sm focus:outline-none focus:ring focus:ring-blue-300"
-          >
-            <option value="">All Types</option>
-            {availableTypes.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
+          />
 
           <button
             onClick={applyFilters}
